@@ -3,8 +3,8 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { AnalyticsService } from '../services/analytics.service';
-import { ProblemFilters } from '../types/problem.types';
 import { sendSuccess } from '../utils/response.utils';
+import { parseFilters } from '../utils/filter.utils';
 
 // Lazy initialization to ensure database is connected first
 let analyticsService: AnalyticsService;
@@ -20,7 +20,7 @@ const getAnalyticsService = () => {
  */
 export const getKPIs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const filters: ProblemFilters = req.query;
+    const filters = parseFilters(req.query);
     const kpis = await getAnalyticsService().getKPIs(filters);
     sendSuccess(res, kpis);
   } catch (error) {
@@ -33,8 +33,9 @@ export const getKPIs = async (req: Request, res: Response, next: NextFunction): 
  */
 export const getTimeSeries = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { granularity = 'day', ...filters } = req.query;
-    const data = await getAnalyticsService().getTimeSeries(granularity as 'day' | 'week' | 'month', filters as ProblemFilters);
+    const { granularity = 'day', ...queryFilters } = req.query;
+    const filters = parseFilters(queryFilters);
+    const data = await getAnalyticsService().getTimeSeries(granularity as 'day' | 'week' | 'month', filters);
     sendSuccess(res, data);
   } catch (error) {
     next(error);
@@ -46,7 +47,7 @@ export const getTimeSeries = async (req: Request, res: Response, next: NextFunct
  */
 export const getImpactSeverityMatrix = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const filters: ProblemFilters = req.query;
+    const filters = parseFilters(req.query);
     const data = await getAnalyticsService().getImpactSeverityMatrix(filters);
     sendSuccess(res, data);
   } catch (error) {
@@ -59,8 +60,9 @@ export const getImpactSeverityMatrix = async (req: Request, res: Response, next:
  */
 export const getTopEntities = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { limit = 10, ...filters } = req.query;
-    const data = await getAnalyticsService().getTopEntities(Number(limit), filters as ProblemFilters);
+    const { limit = 10, ...queryFilters } = req.query;
+    const filters = parseFilters(queryFilters);
+    const data = await getAnalyticsService().getTopEntities(Number(limit), filters);
     sendSuccess(res, data);
   } catch (error) {
     next(error);
@@ -72,7 +74,7 @@ export const getTopEntities = async (req: Request, res: Response, next: NextFunc
  */
 export const getManagementZones = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const filters: ProblemFilters = req.query;
+    const filters = parseFilters(req.query);
     const data = await getAnalyticsService().getManagementZones(filters);
     sendSuccess(res, data);
   } catch (error) {
@@ -85,7 +87,7 @@ export const getManagementZones = async (req: Request, res: Response, next: Next
  */
 export const getRemediationFunnel = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const filters: ProblemFilters = req.query;
+    const filters = parseFilters(req.query);
     const data = await getAnalyticsService().getRemediationFunnel(filters);
     sendSuccess(res, data);
   } catch (error) {
@@ -98,7 +100,7 @@ export const getRemediationFunnel = async (req: Request, res: Response, next: Ne
  */
 export const getDurationDistribution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const filters: ProblemFilters = req.query;
+    const filters = parseFilters(req.query);
     const data = await getAnalyticsService().getDurationDistribution(filters);
     sendSuccess(res, data);
   } catch (error) {
@@ -111,7 +113,7 @@ export const getDurationDistribution = async (req: Request, res: Response, next:
  */
 export const getEvidenceTypes = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const filters: ProblemFilters = req.query;
+    const filters = parseFilters(req.query);
     const data = await getAnalyticsService().getEvidenceTypes(filters);
     sendSuccess(res, data);
   } catch (error) {
@@ -124,7 +126,7 @@ export const getEvidenceTypes = async (req: Request, res: Response, next: NextFu
  */
 export const getRootCauseAnalysis = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const filters: ProblemFilters = req.query;
+    const filters = parseFilters(req.query);
     const data = await getAnalyticsService().getRootCauseAnalysis(filters);
     sendSuccess(res, data);
   } catch (error) {
@@ -137,7 +139,7 @@ export const getRootCauseAnalysis = async (req: Request, res: Response, next: Ne
  */
 export const getRootCauseDistribution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const filters: ProblemFilters = req.query;
+    const filters = parseFilters(req.query);
     const data = await getAnalyticsService().getRootCauseDistribution(filters);
     sendSuccess(res, data);
   } catch (error) {

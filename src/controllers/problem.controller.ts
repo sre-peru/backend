@@ -4,7 +4,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ProblemService } from '../services/problem.service';
 import { sendSuccess, sendError } from '../utils/response.utils';
-import { ProblemFilters } from '../types/problem.types';
+import { parseFilters } from '../utils/filter.utils';
 
 // Lazy initialization to ensure database is connected first
 let problemService: ProblemService;
@@ -25,53 +25,11 @@ export const getProblems = async (req: Request, res: Response, next: NextFunctio
       limit = 10,
       sortBy = 'startTime',
       sortOrder = 'desc',
-      impactLevel,
-      severityLevel,
-      status,
-      managementZones,
-      affectedEntityTypes,
-      entityTags,
-      dateFrom,
-      dateTo,
-      durationMin,
-      durationMax,
-      hasComments,
-      hasGitHubActions,
-      evidenceType,
-      search,
+      ...queryFilters
     } = req.query;
 
-    // Build filters
-    const filters: ProblemFilters = {};
-
-    if (impactLevel) {
-      filters.impactLevel = Array.isArray(impactLevel) ? impactLevel as any[] : [impactLevel as any];
-    }
-    if (severityLevel) {
-      filters.severityLevel = Array.isArray(severityLevel) ? severityLevel as any[] : [severityLevel as any];
-    }
-    if (status) {
-      filters.status = Array.isArray(status) ? status as any[] : [status as any];
-    }
-    if (managementZones) {
-      filters.managementZones = Array.isArray(managementZones) ? managementZones as string[] : [managementZones as string];
-    }
-    if (affectedEntityTypes) {
-      filters.affectedEntityTypes = Array.isArray(affectedEntityTypes) ? affectedEntityTypes as string[] : [affectedEntityTypes as string];
-    }
-    if (entityTags) {
-      filters.entityTags = Array.isArray(entityTags) ? entityTags as string[] : [entityTags as string];
-    }
-    if (dateFrom) filters.dateFrom = dateFrom as string;
-    if (dateTo) filters.dateTo = dateTo as string;
-    if (durationMin) filters.durationMin = Number(durationMin);
-    if (durationMax) filters.durationMax = Number(durationMax);
-    if (hasComments !== undefined) filters.hasComments = hasComments === 'true';
-    if (hasGitHubActions !== undefined) filters.hasGitHubActions = hasGitHubActions === 'true';
-    if (evidenceType) {
-      filters.evidenceType = Array.isArray(evidenceType) ? evidenceType as string[] : [evidenceType as string];
-    }
-    if (search) filters.search = search as string;
+    // Parse filters from query params
+    const filters = parseFilters(queryFilters);
 
     const result = await getProblemService().getProblems(
       filters,
