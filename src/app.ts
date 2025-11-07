@@ -22,12 +22,26 @@ export const createApp = (): Application => {
   app.use(helmet());
 
   // CORS configuration
+  const allowedOrigins = config.cors.origin.split(',').map(origin => origin.trim());
+  
   app.use(
     cors({
-      origin: config.cors.origin,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        // Check if the origin is in the allowed list
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+          callback(null, true);
+        } else {
+          console.warn(`CORS blocked origin: ${origin}`);
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+      exposedHeaders: ['Set-Cookie'],
     })
   );
 
