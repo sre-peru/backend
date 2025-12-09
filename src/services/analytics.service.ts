@@ -364,4 +364,67 @@ export class AnalyticsService {
 
     return { data };
   }
+
+  /**
+   * Get impact level distribution (doughnut chart data)
+   */
+  async getImpactDistribution(filters?: ProblemFilters) {
+    const problems = await this.repository.findAllProblems(filters);
+
+    const distribution: Record<string, number> = {};
+
+    problems.forEach(problem => {
+      const impact = problem.impactLevel;
+      distribution[impact] = (distribution[impact] || 0) + 1;
+    });
+
+    const data = Object.entries(distribution).map(([name, value]) => ({
+      name,
+      value,
+    }));
+
+    return { data };
+  }
+
+  /**
+   * Get severity level distribution (doughnut chart data)
+   */
+  async getSeverityDistribution(filters?: ProblemFilters) {
+    const problems = await this.repository.findAllProblems(filters);
+
+    const distribution: Record<string, number> = {};
+
+    problems.forEach(problem => {
+      const severity = problem.severityLevel;
+      distribution[severity] = (distribution[severity] || 0) + 1;
+    });
+
+    const data = Object.entries(distribution).map(([name, value]) => ({
+      name,
+      value,
+    }));
+
+    return { data };
+  }
+
+  /**
+   * Get root cause existence distribution (doughnut chart data)
+   */
+  async getHasRootCauseDistribution(filters?: ProblemFilters) {
+    const problems = await this.repository.findAllProblems(filters);
+
+    const withRootCause = problems.filter(p => 
+      p.rootCauseEntity !== null && 
+      p.rootCauseEntity !== undefined &&
+      Object.keys(p.rootCauseEntity).length > 0
+    ).length;
+    const withoutRootCause = problems.length - withRootCause;
+
+    const data = [
+      { name: 'Sí', value: withRootCause },
+      { name: 'No', value: withoutRootCause },
+    ];
+
+    return { data };
+  }
 }

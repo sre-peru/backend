@@ -146,3 +146,42 @@ export const getRootCauseDistribution = async (req: Request, res: Response, next
     next(error);
   }
 };
+
+/**
+ * Get impact level distribution (doughnut chart)
+ */
+export const getImpactDistribution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const filters = parseFilters(req.query);
+    const data = await getAnalyticsService().getImpactDistribution(filters);
+    sendSuccess(res, data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get severity level distribution (doughnut chart)
+ */
+export const getSeverityDistribution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const filters = parseFilters(req.query);
+    const data = await getAnalyticsService().getSeverityDistribution(filters);
+    sendSuccess(res, data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get root cause existence distribution (doughnut chart)
+ */
+export const getHasRootCauseDistribution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const filters = parseFilters(req.query);
+    const data = await getAnalyticsService().getHasRootCauseDistribution(filters);
+    sendSuccess(res, data);
+  } catch (error) {
+    next(error);
+  }
+};

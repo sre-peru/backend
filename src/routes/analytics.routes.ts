@@ -40,4 +40,13 @@ router.get('/root-cause-analysis', analyticsController.getRootCauseAnalysis);
 // GET /api/v1/analytics/root-cause-distribution
 router.get('/root-cause-distribution', analyticsController.getRootCauseDistribution);
 
+// GET /api/v1/analytics/impact-distribution
+router.get('/impact-distribution', analyticsController.getImpactDistribution);
+
+// GET /api/v1/analytics/severity-distribution
+router.get('/severity-distribution', analyticsController.getSeverityDistribution);
+
+// GET /api/v1/analytics/has-root-cause-distribution
+router.get('/has-root-cause-distribution', analyticsController.getHasRootCauseDistribution);
+
 export default router;
