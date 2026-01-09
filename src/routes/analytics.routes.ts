@@ -49,4 +49,7 @@ router.get('/severity-distribution', analyticsController.getSeverityDistribution
 // GET /api/v1/analytics/has-root-cause-distribution
 router.get('/has-root-cause-distribution', analyticsController.getHasRootCauseDistribution);
 
+// GET /api/v1/analytics/autoremediado-distribution
+router.get('/autoremediado-distribution', analyticsController.getAutoremediadoDistribution);
+
 export default router;

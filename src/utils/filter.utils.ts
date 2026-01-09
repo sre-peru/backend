@@ -93,5 +93,25 @@ export const parseFilters = (query: any): ProblemFilters => {
     }
   }
 
+  if (query.autoremediado !== undefined) {
+    if (query.autoremediado === 'true' || query.autoremediado === true) {
+      filters.autoremediado = true;
+    } else if (query.autoremediado === 'false' || query.autoremediado === false) {
+      filters.autoremediado = false;
+    } else {
+      filters.autoremediado = null;
+    }
+  }
+
+  if (query.funcionoAutoRemediacion !== undefined) {
+    if (query.funcionoAutoRemediacion === 'true' || query.funcionoAutoRemediacion === true) {
+      filters.funcionoAutoRemediacion = true;
+    } else if (query.funcionoAutoRemediacion === 'false' || query.funcionoAutoRemediacion === false) {
+      filters.funcionoAutoRemediacion = false;
+    } else {
+      filters.funcionoAutoRemediacion = null;
+    }
+  }
+
   return filters;
 };

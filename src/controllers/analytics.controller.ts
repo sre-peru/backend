@@ -185,3 +185,16 @@ export const getHasRootCauseDistribution = async (req: Request, res: Response, n
     next(error);
   }
 };
+
+/**
+ * Get autoremediado distribution (pie chart)
+ */
+export const getAutoremediadoDistribution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const filters = parseFilters(req.query);
+    const data = await getAnalyticsService().getAutoremediadoDistribution(filters);
+    sendSuccess(res, data);
+  } catch (error) {
+    next(error);
+  }
+};

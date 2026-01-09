@@ -106,6 +106,16 @@ export class ProblemRepository {
       }
     }
 
+    // Autoremediado filter
+    if (filters.autoremediado !== undefined && filters.autoremediado !== null) {
+      mongoFilter.autoremediado = filters.autoremediado;
+    }
+
+    // FuncionoAutoRemediacion filter
+    if (filters.funcionoAutoRemediacion !== undefined && filters.funcionoAutoRemediacion !== null) {
+      mongoFilter.funcionoAutoRemediacion = filters.funcionoAutoRemediacion;
+    }
+
     return mongoFilter;
   }
 

@@ -427,4 +427,23 @@ export class AnalyticsService {
 
     return { data };
   }
+
+  /**
+   * Get autoremediado distribution (pie chart data)
+   */
+  async getAutoremediadoDistribution(filters?: ProblemFilters) {
+    const problems = await this.repository.findAllProblems(filters);
+
+    const conAutoremediado = problems.filter(p => 
+      (p as any).autoremediado === true
+    ).length;
+    const sinAutoremediado = problems.length - conAutoremediado;
+
+    const data = [
+      { name: 'Sí', value: conAutoremediado },
+      { name: 'No', value: sinAutoremediado },
+    ];
+
+    return { data };
+  }
 }

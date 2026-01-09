@@ -113,6 +113,8 @@ export interface ProblemFilters {
   evidenceType?: string[];
   search?: string;
   hasRootCause?: boolean | null; // null = all, true = has root cause, false = no root cause
+  autoremediado?: boolean | null;
+  funcionoAutoRemediacion?: boolean | null;
 }
 
 export interface PaginatedProblemsResponse {
