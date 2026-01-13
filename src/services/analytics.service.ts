@@ -434,8 +434,10 @@ export class AnalyticsService {
   async getAutoremediadoDistribution(filters?: ProblemFilters) {
     const problems = await this.repository.findAllProblems(filters);
 
-    const conAutoremediado = problems.filter(p => 
-      (p as any).autoremediado === true
+    const conAutoremediado = problems.filter(p =>
+      p.recentComments.comments && p.recentComments.comments.some(comment =>
+        comment.content.toLowerCase().includes('github actions')
+      )
     ).length;
     const sinAutoremediado = problems.length - conAutoremediado;
 
@@ -443,6 +445,85 @@ export class AnalyticsService {
       { name: 'Sí', value: conAutoremediado },
       { name: 'No', value: sinAutoremediado },
     ];
+
+    return { data };
+  }
+
+  /**
+   * Get autoremediation time series data
+   */
+  async getAutoremediationTimeSeries(granularity: 'day' | 'week' | 'month' = 'day', filters?: ProblemFilters) {
+    const problems = await this.repository.findAllProblems(filters);
+    const autoremediatedProblems = problems.filter(p =>
+      p.recentComments.comments && p.recentComments.comments.some(comment =>
+        comment.content.toLowerCase().includes('github actions')
+      )
+    );
+
+    const timeSeriesMap = new Map<string, number>();
+
+    autoremediatedProblems.forEach(problem => {
+      const date = new Date(problem.startTime);
+      let key: string;
+
+      if (granularity === 'day') {
+        key = date.toISOString().split('T')[0];
+      } else if (granularity === 'week') {
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        key = weekStart.toISOString().split('T')[0];
+      } else {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      }
+
+      timeSeriesMap.set(key, (timeSeriesMap.get(key) || 0) + 1);
+    });
+
+    const data = Array.from(timeSeriesMap.entries())
+      .map(([timestamp, count]) => ({ timestamp, count }))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+    return { data };
+  }
+
+  /**
+   * Get average resolution time series data
+   */
+  async getAverageResolutionTimeTimeSeries(granularity: 'day' | 'week' | 'month' = 'day', filters?: ProblemFilters) {
+    const problems = await this.repository.findAllProblems(filters);
+    const closedProblems = problems.filter(p => p.status === 'CLOSED');
+
+    const timeSeriesMap = new Map<string, { totalDuration: number; count: number }>();
+
+    closedProblems.forEach(problem => {
+      const date = new Date(problem.startTime);
+      let key: string;
+
+      if (granularity === 'day') {
+        key = date.toISOString().split('T')[0];
+      } else if (granularity === 'week') {
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        key = weekStart.toISOString().split('T')[0];
+      } else {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      }
+
+      if (!timeSeriesMap.has(key)) {
+        timeSeriesMap.set(key, { totalDuration: 0, count: 0 });
+      }
+
+      const entry = timeSeriesMap.get(key)!;
+      entry.totalDuration += problem.duration || 0;
+      entry.count++;
+    });
+
+    const data = Array.from(timeSeriesMap.entries())
+      .map(([timestamp, { totalDuration, count }]) => ({
+        timestamp,
+        avgResolutionTime: count > 0 ? Math.round(totalDuration / count) : 0,
+      }))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
     return { data };
   }

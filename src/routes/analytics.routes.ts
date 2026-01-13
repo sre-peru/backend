@@ -52,4 +52,10 @@ router.get('/has-root-cause-distribution', analyticsController.getHasRootCauseDi
 // GET /api/v1/analytics/autoremediado-distribution
 router.get('/autoremediado-distribution', analyticsController.getAutoremediadoDistribution);
 
+// GET /api/v1/analytics/autoremediation-timeseries
+router.get('/autoremediation-timeseries', analyticsController.getAutoremediationTimeSeries);
+
+// GET /api/v1/analytics/avg-resolution-timeseries
+router.get('/avg-resolution-timeseries', analyticsController.getAverageResolutionTimeTimeSeries);
+
 export default router;

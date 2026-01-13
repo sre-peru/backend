@@ -198,3 +198,31 @@ export const getAutoremediadoDistribution = async (req: Request, res: Response, 
     next(error);
   }
 };
+
+/**
+ * Get autoremediation time series
+ */
+export const getAutoremediationTimeSeries = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { granularity = 'day', ...queryFilters } = req.query;
+    const filters = parseFilters(queryFilters);
+    const data = await getAnalyticsService().getAutoremediationTimeSeries(granularity as 'day' | 'week' | 'month', filters);
+    sendSuccess(res, data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get average resolution time series
+ */
+export const getAverageResolutionTimeTimeSeries = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { granularity = 'day', ...queryFilters } = req.query;
+    const filters = parseFilters(queryFilters);
+    const data = await getAnalyticsService().getAverageResolutionTimeTimeSeries(granularity as 'day' | 'week' | 'month', filters);
+    sendSuccess(res, data);
+  } catch (error) {
+    next(error);
+  }
+};

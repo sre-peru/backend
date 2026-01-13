@@ -88,10 +88,7 @@ export class ProblemRepository {
       if (filters.hasRootCause) {
         mongoFilter.rootCauseEntity = { $ne: null, $exists: true };
       } else {
-        mongoFilter.$or = [
-          { rootCauseEntity: null },
-          { rootCauseEntity: { $exists: false } }
-        ];
+        mongoFilter.rootCauseEntity = null;
       }
     }
 
