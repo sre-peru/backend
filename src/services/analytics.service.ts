@@ -102,14 +102,22 @@ export class AnalyticsService {
       }
     }
 
-    // Autoremediado filter
+    // Autoremediado filter - MongoDB stores 'Si', 'Sí', 'No' as strings
     if (filters.autoremediado !== undefined && filters.autoremediado !== null) {
-      match.Autoremediado = filters.autoremediado;
+      if (filters.autoremediado === true) {
+        match.Autoremediado = { $in: ['Si', 'Sí', 'si', 'sí', 'YES', 'yes', 'true', '1'] };
+      } else {
+        match.Autoremediado = { $nin: ['Si', 'Sí', 'si', 'sí', 'YES', 'yes', 'true', '1'] };
+      }
     }
 
-    // FuncionoAutoRemediacion filter
+    // FuncionoAutoRemediacion filter - MongoDB stores 'Si', 'Sí', 'No' as strings
     if (filters.funcionoAutoRemediacion !== undefined && filters.funcionoAutoRemediacion !== null) {
-      match.FuncionoAutoRemediacion = filters.funcionoAutoRemediacion;
+      if (filters.funcionoAutoRemediacion === true) {
+        match.FuncionoAutoRemediacion = { $in: ['Si', 'Sí', 'si', 'sí', 'YES', 'yes', 'true', '1'] };
+      } else {
+        match.FuncionoAutoRemediacion = { $nin: ['Si', 'Sí', 'si', 'sí', 'YES', 'yes', 'true', '1'] };
+      }
     }
 
     return match;

@@ -103,14 +103,22 @@ export class ProblemRepository {
       }
     }
 
-    // Autoremediado filter
+    // Autoremediado filter - MongoDB field is 'Autoremediado' with capital A, stores 'Si', 'Sí', 'No' as strings
     if (filters.autoremediado !== undefined && filters.autoremediado !== null) {
-      mongoFilter.autoremediado = filters.autoremediado;
+      if (filters.autoremediado === true) {
+        mongoFilter.Autoremediado = { $in: ['Si', 'Sí', 'si', 'sí', 'YES', 'yes', 'true', '1'] };
+      } else {
+        mongoFilter.Autoremediado = { $nin: ['Si', 'Sí', 'si', 'sí', 'YES', 'yes', 'true', '1'] };
+      }
     }
 
-    // FuncionoAutoRemediacion filter
+    // FuncionoAutoRemediacion filter - MongoDB field uses capital letters, stores 'Si', 'Sí', 'No' as strings
     if (filters.funcionoAutoRemediacion !== undefined && filters.funcionoAutoRemediacion !== null) {
-      mongoFilter.funcionoAutoRemediacion = filters.funcionoAutoRemediacion;
+      if (filters.funcionoAutoRemediacion === true) {
+        mongoFilter.FuncionoAutoRemediacion = { $in: ['Si', 'Sí', 'si', 'sí', 'YES', 'yes', 'true', '1'] };
+      } else {
+        mongoFilter.FuncionoAutoRemediacion = { $nin: ['Si', 'Sí', 'si', 'sí', 'YES', 'yes', 'true', '1'] };
+      }
     }
 
     return mongoFilter;
