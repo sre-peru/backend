@@ -1,0 +1,5 @@
+
+Analysis of last 50 documents:
+- Documents with explicit 'duration' field: 0
+- Documents using calculated duration: 50
+    

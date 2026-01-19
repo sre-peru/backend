@@ -1,192 +1,336 @@
 /**
  * Analytics Service - Business Logic for Analytics
+ * Optimized with MongoDB Aggregation Pipelines
  */
-import { ProblemRepository } from '../repositories/problem.repository';
+import { Collection, Document } from 'mongodb';
+import { database } from '../config/database';
 import { DashboardKPIs, ProblemFilters } from '../types/problem.types';
 
 export class AnalyticsService {
-  private repository: ProblemRepository;
-
-  constructor() {
-    this.repository = new ProblemRepository();
+  /**
+   * Get MongoDB collection
+   */
+  private getCollection(): Collection {
+    return database.getCollection();
   }
 
   /**
-   * Calculate Dashboard KPIs
+   * Build MongoDB match stage from ProblemFilters
+   */
+  private buildMatchStage(filters?: ProblemFilters): Document {
+    const match: Document = {};
+
+    if (!filters) return match;
+
+    // Impact Level filter
+    if (filters.impactLevel && filters.impactLevel.length > 0) {
+      match.impactLevel = { $in: filters.impactLevel };
+    }
+
+    // Severity Level filter
+    if (filters.severityLevel && filters.severityLevel.length > 0) {
+      match.severityLevel = { $in: filters.severityLevel };
+    }
+
+    // Status filter
+    if (filters.status && filters.status.length > 0) {
+      match.status = { $in: filters.status };
+    }
+
+    // Management Zones filter
+    if (filters.managementZones && filters.managementZones.length > 0) {
+      match['managementZones.name'] = { $in: filters.managementZones };
+    }
+
+    // Affected Entity Types filter
+    if (filters.affectedEntityTypes && filters.affectedEntityTypes.length > 0) {
+      match['affectedEntities.entityId.type'] = { $in: filters.affectedEntityTypes };
+    }
+
+    // Entity Tags filter
+    if (filters.entityTags && filters.entityTags.length > 0) {
+      match['entityTags.stringRepresentation'] = { $in: filters.entityTags };
+    }
+
+    // Date range filter
+    if (filters.dateFrom || filters.dateTo) {
+      match.startTime = {};
+      if (filters.dateFrom) {
+        match.startTime.$gte = filters.dateFrom;
+      }
+      if (filters.dateTo) {
+        match.startTime.$lte = filters.dateTo;
+      }
+    }
+
+    // Has comments filter
+    if (filters.hasComments !== undefined) {
+      if (filters.hasComments) {
+        match['recentComments.totalCount'] = { $gt: 0 };
+      } else {
+        match['recentComments.totalCount'] = 0;
+      }
+    }
+
+    // GitHub Actions filter
+    if (filters.hasGitHubActions) {
+      match['recentComments.comments.content'] = { $regex: 'GitHub Actions', $options: 'i' };
+    }
+
+    // Evidence Type filter
+    if (filters.evidenceType && filters.evidenceType.length > 0) {
+      match['evidenceDetails.details.evidenceType'] = { $in: filters.evidenceType };
+    }
+
+    // Root Cause filter
+    if (filters.hasRootCause !== undefined && filters.hasRootCause !== null) {
+      if (filters.hasRootCause) {
+        match.rootCauseEntity = { $ne: null, $exists: true };
+      } else {
+        match.rootCauseEntity = null;
+      }
+    }
+
+    // Duration filter
+    if (filters.durationMin !== undefined || filters.durationMax !== undefined) {
+      match.duration = {};
+      if (filters.durationMin !== undefined) {
+        match.duration.$gte = filters.durationMin;
+      }
+      if (filters.durationMax !== undefined) {
+        match.duration.$lte = filters.durationMax;
+      }
+    }
+
+    // Autoremediado filter
+    if (filters.autoremediado !== undefined && filters.autoremediado !== null) {
+      match.Autoremediado = filters.autoremediado;
+    }
+
+    // FuncionoAutoRemediacion filter
+    if (filters.funcionoAutoRemediacion !== undefined && filters.funcionoAutoRemediacion !== null) {
+      match.FuncionoAutoRemediacion = filters.funcionoAutoRemediacion;
+    }
+
+    return match;
+  }
+
+  /**
+   * Calculate Dashboard KPIs using aggregation
    */
   async getKPIs(filters?: ProblemFilters): Promise<DashboardKPIs> {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const totalProblems = problems.length;
-    const openProblems = problems.filter(p => p.status === 'OPEN').length;
-    const closedProblems = problems.filter(p => p.status === 'CLOSED').length;
-
-    // Calculate total duration and average resolution time
-    let totalDuration = 0;
-    let resolutionTimes: number[] = [];
-
-    problems.forEach(problem => {
-      const duration = problem.duration || 0; // Use duration from DB
-      totalDuration += duration;
-
-      if (problem.status === 'CLOSED') {
-        resolutionTimes.push(duration);
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          totalProblems: { $sum: 1 },
+          openProblems: { $sum: { $cond: [{ $eq: ['$status', 'OPEN'] }, 1, 0] } },
+          closedProblems: { $sum: { $cond: [{ $eq: ['$status', 'CLOSED'] }, 1, 0] } },
+          totalDuration: { $sum: { $ifNull: ['$duration', 0] } },
+          problemsWithComments: {
+            $sum: { $cond: [{ $gt: ['$recentComments.totalCount', 0] }, 1, 0] }
+          },
+          criticalProblems: {
+            $sum: {
+              $cond: [{ $in: ['$severityLevel', ['AVAILABILITY', 'ERROR']] }, 1, 0]
+            }
+          },
+          // Sum of durations for closed problems
+          closedDurationSum: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'CLOSED'] }, { $ifNull: ['$duration', 0] }, 0]
+            }
+          }
+        }
       }
+    ];
+
+    const [result] = await collection.aggregate(pipeline).toArray();
+
+    if (!result) {
+      return {
+        totalProblems: 0,
+        openProblems: 0,
+        closedProblems: 0,
+        totalDuration: 0,
+        avgResolutionTime: 0,
+        problemsWithComments: 0,
+        githubActionProblems: 0,
+        criticalProblems: 0,
+      };
+    }
+
+    // Get GitHub Actions count separately (requires text matching in array)
+    const githubActionsCount = await collection.countDocuments({
+      ...match,
+      'recentComments.comments.content': { $regex: 'github actions', $options: 'i' }
     });
 
-    const avgResolutionTime = resolutionTimes.length > 0
-      ? Math.round(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length)
+    const avgResolutionTime = result.closedProblems > 0
+      ? Math.round(result.closedDurationSum / result.closedProblems)
       : 0;
 
-    // Problems with comments
-    const problemsWithComments = problems.filter(
-      p => p.recentComments.totalCount > 0
-    ).length;
-
-    // Problems with GitHub Actions in comments
-    const githubActionProblems = problems.filter(p =>
-      p.recentComments.comments && p.recentComments.comments.some(comment =>
-        comment.content.toLowerCase().includes('github actions')
-      )
-    ).length;
-
-    // Critical problems (AVAILABILITY or ERROR severity)
-    const criticalProblems = problems.filter(
-      p => p.severityLevel === 'AVAILABILITY' || p.severityLevel === 'ERROR'
-    ).length;
-
     return {
-      totalProblems,
-      openProblems,
-      closedProblems,
-      totalDuration,
+      totalProblems: result.totalProblems,
+      openProblems: result.openProblems,
+      closedProblems: result.closedProblems,
+      totalDuration: result.totalDuration,
       avgResolutionTime,
-      problemsWithComments,
-      githubActionProblems,
-      criticalProblems,
+      problemsWithComments: result.problemsWithComments,
+      githubActionProblems: githubActionsCount,
+      criticalProblems: result.criticalProblems,
     };
   }
 
   /**
-   * Get time series data for problems
+   * Get time series data for problems using aggregation
    */
   async getTimeSeries(granularity: 'day' | 'week' | 'month' = 'day', filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    // Group problems by time and severity
-    const timeSeriesMap = new Map<string, Record<string, number>>();
+    // Build date format based on granularity
+    let dateFormat: string;
+    if (granularity === 'day') {
+      dateFormat = '%Y-%m-%d';
+    } else if (granularity === 'week') {
+      dateFormat = '%Y-W%V';
+    } else {
+      dateFormat = '%Y-%m';
+    }
 
-    problems.forEach(problem => {
-      const date = new Date(problem.startTime);
-      let key: string;
+    const pipeline = [
+      { $match: match },
+      {
+        $addFields: {
+          parsedDate: {
+            $cond: {
+              if: { $eq: [{ $type: '$startTime' }, 'string'] },
+              then: { $dateFromString: { dateString: '$startTime', onError: new Date() } },
+              else: '$startTime'
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            timestamp: { $dateToString: { format: dateFormat, date: '$parsedDate' } },
+            severity: '$severityLevel'
+          },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.timestamp',
+          severityBreakdown: {
+            $push: {
+              severity: '$_id.severity',
+              count: '$count'
+            }
+          }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ];
 
-      if (granularity === 'day') {
-        key = date.toISOString().split('T')[0];
-      } else if (granularity === 'week') {
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        key = weekStart.toISOString().split('T')[0];
-      } else {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      }
+    const results = await collection.aggregate(pipeline).toArray();
 
-      if (!timeSeriesMap.has(key)) {
-        timeSeriesMap.set(key, {});
-      }
-
-      const severityBreakdown = timeSeriesMap.get(key)!;
-      severityBreakdown[problem.severityLevel] = (severityBreakdown[problem.severityLevel] || 0) + 1;
+    const data = results.map(item => {
+      const severityBreakdown: Record<string, number> = {};
+      item.severityBreakdown.forEach((s: { severity: string; count: number }) => {
+        severityBreakdown[s.severity] = s.count;
+      });
+      return {
+        timestamp: item._id,
+        severityBreakdown
+      };
     });
-
-    // Convert to array and sort by timestamp
-    const data = Array.from(timeSeriesMap.entries())
-      .map(([timestamp, severityBreakdown]) => ({
-        timestamp,
-        severityBreakdown,
-      }))
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
     return { data };
   }
 
   /**
-   * Get impact vs severity matrix
+   * Get impact vs severity matrix using aggregation
    */
   async getImpactSeverityMatrix(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
+
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            impact: '$impactLevel',
+            severity: '$severityLevel'
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ];
+
+    const results = await collection.aggregate(pipeline).toArray();
 
     const matrix: Record<string, Record<string, number>> = {};
-
-    problems.forEach(problem => {
-      if (!matrix[problem.impactLevel]) {
-        matrix[problem.impactLevel] = {};
+    results.forEach(item => {
+      if (!matrix[item._id.impact]) {
+        matrix[item._id.impact] = {};
       }
-      matrix[problem.impactLevel][problem.severityLevel] =
-        (matrix[problem.impactLevel][problem.severityLevel] || 0) + 1;
+      matrix[item._id.impact][item._id.severity] = item.count;
     });
 
     return { matrix };
   }
 
   /**
-   * Get top affected entities
+   * Get top affected entities using aggregation
    */
   async getTopEntities(limit: number = 10, filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const entityMap = new Map<string, { name: string; type: string; count: number }>();
-
-    problems.forEach(problem => {
-      problem.affectedEntities.forEach(entity => {
-        const key = entity.entityId.id;
-        if (entityMap.has(key)) {
-          entityMap.get(key)!.count++;
-        } else {
-          entityMap.set(key, {
-            name: entity.name,
-            type: entity.entityId.type,
-            count: 1,
-          });
+    const pipeline = [
+      { $match: match },
+      { $unwind: '$affectedEntities' },
+      {
+        $group: {
+          _id: '$affectedEntities.entityId.id',
+          name: { $first: '$affectedEntities.name' },
+          type: { $first: '$affectedEntities.entityId.type' },
+          count: { $sum: 1 }
         }
-      });
-    });
+      },
+      { $sort: { count: -1 } },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 0,
+          name: 1,
+          type: 1,
+          problemCount: '$count'
+        }
+      }
+    ];
 
-    const entities = Array.from(entityMap.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, limit)
-      .map(entity => ({
-        name: entity.name,
-        type: entity.type,
-        problemCount: entity.count,
-      }));
+    const entities = await collection.aggregate(pipeline).toArray();
 
     return { entities };
   }
 
   /**
-   * Get management zones analysis
+   * Get management zones analysis using aggregation
    */
   async getManagementZones(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const zoneMap = new Map<string, { count: number; severities: string[] }>();
-
-    problems.forEach(problem => {
-      problem.managementZones.forEach(zone => {
-        if (zoneMap.has(zone.name)) {
-          const data = zoneMap.get(zone.name)!;
-          data.count++;
-          data.severities.push(problem.severityLevel);
-        } else {
-          zoneMap.set(zone.name, {
-            count: 1,
-            severities: [problem.severityLevel],
-          });
-        }
-      });
-    });
-
-    const severityWeights = {
+    const severityWeights: Record<string, number> = {
       AVAILABILITY: 5,
       ERROR: 4,
       PERFORMANCE: 3,
@@ -194,14 +338,36 @@ export class AnalyticsService {
       CUSTOM_ALERT: 1,
     };
 
-    const zones = Array.from(zoneMap.entries()).map(([name, data]) => {
-      const avgSeverity =
-        data.severities.reduce((sum, sev) => sum + (severityWeights[sev as keyof typeof severityWeights] || 0), 0) /
-        data.severities.length;
+    const pipeline = [
+      { $match: match },
+      { $unwind: '$managementZones' },
+      {
+        $group: {
+          _id: '$managementZones.name',
+          problemCount: { $sum: 1 },
+          severities: { $push: '$severityLevel' }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: '$_id',
+          problemCount: 1,
+          severities: 1
+        }
+      }
+    ];
+
+    const results = await collection.aggregate(pipeline).toArray();
+
+    const zones = results.map(zone => {
+      const avgSeverity = zone.severities.reduce((sum: number, sev: string) => {
+        return sum + (severityWeights[sev] || 0);
+      }, 0) / zone.severities.length;
 
       return {
-        name,
-        problemCount: data.count,
+        name: zone.name,
+        problemCount: zone.problemCount,
         avgSeverity: Number(avgSeverity.toFixed(2)),
       };
     });
@@ -210,22 +376,51 @@ export class AnalyticsService {
   }
 
   /**
-   * Get remediation funnel
+   * Get remediation funnel using aggregation with $facet
    */
   async getRemediationFunnel(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const totalProblems = problems.length;
-    const problemsWithComments = problems.filter(p => p.recentComments.totalCount > 0);
-    const problemsWithGitHubActions = problemsWithComments.filter(p =>
-      p.recentComments.comments && p.recentComments.comments.some(c => c.content.toLowerCase().includes('github actions'))
-    );
-    const problemsWithSuccess = problemsWithGitHubActions.filter(p =>
-      p.recentComments.comments && p.recentComments.comments.some(c =>
-        c.content.toLowerCase().includes('success') || c.content.toLowerCase().includes('completed')
-      )
-    );
-    const closedProblems = problems.filter(p => p.status === 'CLOSED');
+    const pipeline = [
+      { $match: match },
+      {
+        $facet: {
+          total: [{ $count: 'count' }],
+          withComments: [
+            { $match: { 'recentComments.totalCount': { $gt: 0 } } },
+            { $count: 'count' }
+          ],
+          withGitHubActions: [
+            { $match: { 'recentComments.comments.content': { $regex: 'github actions', $options: 'i' } } },
+            { $count: 'count' }
+          ],
+          withSuccess: [
+            {
+              $match: {
+                'recentComments.comments.content': {
+                  $regex: '(success|completed)',
+                  $options: 'i'
+                }
+              }
+            },
+            { $count: 'count' }
+          ],
+          closed: [
+            { $match: { status: 'CLOSED' } },
+            { $count: 'count' }
+          ]
+        }
+      }
+    ];
+
+    const [result] = await collection.aggregate(pipeline).toArray();
+
+    const totalProblems = result.total[0]?.count || 0;
+    const problemsWithComments = result.withComments[0]?.count || 0;
+    const problemsWithGitHubActions = result.withGitHubActions[0]?.count || 0;
+    const problemsWithSuccess = result.withSuccess[0]?.count || 0;
+    const closedProblems = result.closed[0]?.count || 0;
 
     const stages = [
       {
@@ -235,23 +430,23 @@ export class AnalyticsService {
       },
       {
         name: 'With Comments',
-        count: problemsWithComments.length,
-        percentage: Number(((problemsWithComments.length / totalProblems) * 100).toFixed(2)),
+        count: problemsWithComments,
+        percentage: totalProblems > 0 ? Number(((problemsWithComments / totalProblems) * 100).toFixed(2)) : 0,
       },
       {
         name: 'GitHub Actions Initiated',
-        count: problemsWithGitHubActions.length,
-        percentage: Number(((problemsWithGitHubActions.length / totalProblems) * 100).toFixed(2)),
+        count: problemsWithGitHubActions,
+        percentage: totalProblems > 0 ? Number(((problemsWithGitHubActions / totalProblems) * 100).toFixed(2)) : 0,
       },
       {
         name: 'Remediation Successful',
-        count: problemsWithSuccess.length,
-        percentage: Number(((problemsWithSuccess.length / totalProblems) * 100).toFixed(2)),
+        count: problemsWithSuccess,
+        percentage: totalProblems > 0 ? Number(((problemsWithSuccess / totalProblems) * 100).toFixed(2)) : 0,
       },
       {
         name: 'Closed',
-        count: closedProblems.length,
-        percentage: Number(((closedProblems.length / totalProblems) * 100).toFixed(2)),
+        count: closedProblems,
+        percentage: totalProblems > 0 ? Number(((closedProblems / totalProblems) * 100).toFixed(2)) : 0,
       },
     ];
 
@@ -259,12 +454,35 @@ export class AnalyticsService {
   }
 
   /**
-   * Get duration distribution
+   * Get duration distribution using aggregation with $switch
    */
   async getDurationDistribution(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const categories = {
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            $switch: {
+              branches: [
+                { case: { $lt: [{ $ifNull: ['$duration', 0] }, 5] }, then: 'less_than_5' },
+                { case: { $lt: [{ $ifNull: ['$duration', 0] }, 10] }, then: '5_to_10' },
+                { case: { $lt: [{ $ifNull: ['$duration', 0] }, 30] }, then: '10_to_30' },
+                { case: { $lt: [{ $ifNull: ['$duration', 0] }, 180] }, then: '30_to_180' },
+              ],
+              default: 'more_than_180'
+            }
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ];
+
+    const results = await collection.aggregate(pipeline).toArray();
+
+    const categories: Record<string, number> = {
       'less_than_5': 0,
       '5_to_10': 0,
       '10_to_30': 0,
@@ -272,90 +490,118 @@ export class AnalyticsService {
       'more_than_180': 0,
     };
 
-    problems.forEach(problem => {
-      const duration = problem.duration || 0; // Use duration from DB
-
-      if (duration < 5) {
-        categories.less_than_5++;
-      } else if (duration < 10) {
-        categories['5_to_10']++;
-      } else if (duration < 30) {
-        categories['10_to_30']++;
-      } else if (duration < 180) {
-        categories['30_to_180']++;
-      } else {
-        categories.more_than_180++;
-      }
+    results.forEach(item => {
+      categories[item._id] = item.count;
     });
 
     return { categories };
   }
 
   /**
-   * Get evidence types breakdown
+   * Get evidence types breakdown using aggregation
    */
   async getEvidenceTypes(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const evidenceMap = new Map<string, Map<string, number>>();
-
-    problems.forEach(problem => {
-      problem.evidenceDetails.details.forEach(evidence => {
-        if (!evidenceMap.has(evidence.evidenceType)) {
-          evidenceMap.set(evidence.evidenceType, new Map());
+    const pipeline = [
+      { $match: match },
+      { $unwind: '$evidenceDetails.details' },
+      {
+        $group: {
+          _id: {
+            evidenceType: '$evidenceDetails.details.evidenceType',
+            eventType: { $ifNull: ['$evidenceDetails.details.eventType', 'UNKNOWN'] }
+          },
+          count: { $sum: 1 }
         }
+      },
+      {
+        $group: {
+          _id: '$_id.evidenceType',
+          children: {
+            $push: {
+              name: '$_id.eventType',
+              value: '$count'
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: '$_id',
+          children: 1
+        }
+      }
+    ];
 
-        const eventTypeMap = evidenceMap.get(evidence.evidenceType)!;
-        const eventType = evidence.eventType || 'UNKNOWN';
-        eventTypeMap.set(eventType, (eventTypeMap.get(eventType) || 0) + 1);
-      });
-    });
-
-    const breakdown: any[] = [];
-    evidenceMap.forEach((eventTypes, evidenceType) => {
-      const children: any[] = [];
-      eventTypes.forEach((count, eventType) => {
-        children.push({ name: eventType, value: count });
-      });
-      breakdown.push({
-        name: evidenceType,
-        children,
-      });
-    });
+    const breakdown = await collection.aggregate(pipeline).toArray();
 
     return { breakdown };
   }
 
   /**
-   * Get root cause entity analysis (treemap data)
+   * Get root cause entity analysis (treemap data) using aggregation
    */
   async getRootCauseAnalysis(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const rootCauseMap = new Map<string, number>();
-
-    problems.forEach(problem => {
-      if (problem.rootCauseEntity && problem.rootCauseEntity.name) {
-        const name = problem.rootCauseEntity.name;
-        rootCauseMap.set(name, (rootCauseMap.get(name) || 0) + 1);
+    const pipeline = [
+      { $match: { ...match, 'rootCauseEntity.name': { $exists: true, $ne: null } } },
+      {
+        $group: {
+          _id: '$rootCauseEntity.name',
+          value: { $sum: 1 }
+        }
+      },
+      { $sort: { value: -1 } },
+      {
+        $project: {
+          _id: 0,
+          name: '$_id',
+          value: 1
+        }
       }
-    });
+    ];
 
-    const data = Array.from(rootCauseMap.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+    const data = await collection.aggregate(pipeline).toArray();
 
     return { data };
   }
 
   /**
-   * Get root cause distribution (pie chart data)
+   * Get root cause distribution (pie chart data) using aggregation
    */
   async getRootCauseDistribution(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const withRootCause = problems.filter(p => p.rootCauseEntity !== null && p.rootCauseEntity !== undefined).length;
-    const withoutRootCause = problems.length - withRootCause;
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          withRootCause: {
+            $sum: {
+              $cond: [
+                { $and: [{ $ne: ['$rootCauseEntity', null] }, { $gt: [{ $type: '$rootCauseEntity' }, 'null'] }] },
+                1,
+                0
+              ]
+            }
+          },
+          total: { $sum: 1 }
+        }
+      }
+    ];
+
+    const [result] = await collection.aggregate(pipeline).toArray();
+
+    const withRootCause = result?.withRootCause || 0;
+    const total = result?.total || 0;
+    const withoutRootCause = total - withRootCause;
 
     const data = [
       { name: 'With Root Cause', value: withRootCause },
@@ -366,59 +612,100 @@ export class AnalyticsService {
   }
 
   /**
-   * Get impact level distribution (doughnut chart data)
+   * Get impact level distribution (doughnut chart data) using aggregation
    */
   async getImpactDistribution(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const distribution: Record<string, number> = {};
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: '$impactLevel',
+          value: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: '$_id',
+          value: 1
+        }
+      }
+    ];
 
-    problems.forEach(problem => {
-      const impact = problem.impactLevel;
-      distribution[impact] = (distribution[impact] || 0) + 1;
-    });
-
-    const data = Object.entries(distribution).map(([name, value]) => ({
-      name,
-      value,
-    }));
+    const data = await collection.aggregate(pipeline).toArray();
 
     return { data };
   }
 
   /**
-   * Get severity level distribution (doughnut chart data)
+   * Get severity level distribution (doughnut chart data) using aggregation
    */
   async getSeverityDistribution(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const distribution: Record<string, number> = {};
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: '$severityLevel',
+          value: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: '$_id',
+          value: 1
+        }
+      }
+    ];
 
-    problems.forEach(problem => {
-      const severity = problem.severityLevel;
-      distribution[severity] = (distribution[severity] || 0) + 1;
-    });
-
-    const data = Object.entries(distribution).map(([name, value]) => ({
-      name,
-      value,
-    }));
+    const data = await collection.aggregate(pipeline).toArray();
 
     return { data };
   }
 
   /**
-   * Get root cause existence distribution (doughnut chart data)
+   * Get root cause existence distribution (doughnut chart data) using aggregation
    */
   async getHasRootCauseDistribution(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const withRootCause = problems.filter(p => 
-      p.rootCauseEntity !== null && 
-      p.rootCauseEntity !== undefined &&
-      Object.keys(p.rootCauseEntity).length > 0
-    ).length;
-    const withoutRootCause = problems.length - withRootCause;
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          withRootCause: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $ne: ['$rootCauseEntity', null] },
+                    { $ne: ['$rootCauseEntity', {}] },
+                    { $gt: [{ $size: { $objectToArray: { $ifNull: ['$rootCauseEntity', {}] } } }, 0] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          total: { $sum: 1 }
+        }
+      }
+    ];
+
+    const [result] = await collection.aggregate(pipeline).toArray();
+
+    const withRootCause = result?.withRootCause || 0;
+    const total = result?.total || 0;
+    const withoutRootCause = total - withRootCause;
 
     const data = [
       { name: 'Sí', value: withRootCause },
@@ -429,17 +716,59 @@ export class AnalyticsService {
   }
 
   /**
-   * Get autoremediado distribution (pie chart data)
+   * Get autoremediado distribution (pie chart data) using aggregation
    */
   async getAutoremediadoDistribution(filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const conAutoremediado = problems.filter(p =>
-      p.recentComments.comments && p.recentComments.comments.some(comment =>
-        comment.content.toLowerCase().includes('github actions')
-      )
-    ).length;
-    const sinAutoremediado = problems.length - conAutoremediado;
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          conAutoremediado: {
+            $sum: {
+              $cond: [
+                { $eq: ['$Autoremediado', true] },
+                1,
+                {
+                  $cond: [
+                    {
+                      $gt: [
+                        {
+                          $size: {
+                            $filter: {
+                              input: { $ifNull: ['$recentComments.comments', []] },
+                              cond: {
+                                $regexMatch: {
+                                  input: { $toLower: '$$this.content' },
+                                  regex: 'github actions'
+                                }
+                              }
+                            }
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    1,
+                    0
+                  ]
+                }
+              ]
+            }
+          },
+          total: { $sum: 1 }
+        }
+      }
+    ];
+
+    const [result] = await collection.aggregate(pipeline).toArray();
+
+    const conAutoremediado = result?.conAutoremediado || 0;
+    const total = result?.total || 0;
+    const sinAutoremediado = total - conAutoremediado;
 
     const data = [
       { name: 'Sí', value: conAutoremediado },
@@ -450,80 +779,112 @@ export class AnalyticsService {
   }
 
   /**
-   * Get autoremediation time series data
+   * Get autoremediation time series data using aggregation
    */
   async getAutoremediationTimeSeries(granularity: 'day' | 'week' | 'month' = 'day', filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
-    const autoremediatedProblems = problems.filter(p =>
-      p.recentComments.comments && p.recentComments.comments.some(comment =>
-        comment.content.toLowerCase().includes('github actions')
-      )
-    );
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const timeSeriesMap = new Map<string, number>();
+    // Build date format based on granularity
+    let dateFormat: string;
+    if (granularity === 'day') {
+      dateFormat = '%Y-%m-%d';
+    } else if (granularity === 'week') {
+      dateFormat = '%Y-W%V';
+    } else {
+      dateFormat = '%Y-%m';
+    }
 
-    autoremediatedProblems.forEach(problem => {
-      const date = new Date(problem.startTime);
-      let key: string;
+    // Match auto-remediated problems
+    const autoRemediatedMatch = {
+      ...match,
+      $or: [
+        { Autoremediado: true },
+        { 'recentComments.comments.content': { $regex: 'github actions', $options: 'i' } }
+      ]
+    };
 
-      if (granularity === 'day') {
-        key = date.toISOString().split('T')[0];
-      } else if (granularity === 'week') {
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        key = weekStart.toISOString().split('T')[0];
-      } else {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const pipeline = [
+      { $match: autoRemediatedMatch },
+      {
+        $addFields: {
+          parsedDate: {
+            $cond: {
+              if: { $eq: [{ $type: '$startTime' }, 'string'] },
+              then: { $dateFromString: { dateString: '$startTime', onError: new Date() } },
+              else: '$startTime'
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: dateFormat, date: '$parsedDate' } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          timestamp: '$_id',
+          count: 1
+        }
       }
+    ];
 
-      timeSeriesMap.set(key, (timeSeriesMap.get(key) || 0) + 1);
-    });
-
-    const data = Array.from(timeSeriesMap.entries())
-      .map(([timestamp, count]) => ({ timestamp, count }))
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const data = await collection.aggregate(pipeline).toArray();
 
     return { data };
   }
 
   /**
-   * Get average resolution time series data
+   * Get average resolution time series data using aggregation
    */
   async getAverageResolutionTimeTimeSeries(granularity: 'day' | 'week' | 'month' = 'day', filters?: ProblemFilters) {
-    const problems = await this.repository.findAllProblems(filters);
-    const closedProblems = problems.filter(p => p.status === 'CLOSED');
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
 
-    const timeSeriesMap = new Map<string, { totalDuration: number; count: number }>();
+    // Build date format based on granularity
+    let dateFormat: string;
+    if (granularity === 'day') {
+      dateFormat = '%Y-%m-%d';
+    } else if (granularity === 'week') {
+      dateFormat = '%Y-W%V';
+    } else {
+      dateFormat = '%Y-%m';
+    }
 
-    closedProblems.forEach(problem => {
-      const date = new Date(problem.startTime);
-      let key: string;
-
-      if (granularity === 'day') {
-        key = date.toISOString().split('T')[0];
-      } else if (granularity === 'week') {
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        key = weekStart.toISOString().split('T')[0];
-      } else {
-        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const pipeline = [
+      { $match: { ...match, status: 'CLOSED' } },
+      {
+        $addFields: {
+          parsedDate: {
+            $cond: {
+              if: { $eq: [{ $type: '$startTime' }, 'string'] },
+              then: { $dateFromString: { dateString: '$startTime', onError: new Date() } },
+              else: '$startTime'
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: dateFormat, date: '$parsedDate' } },
+          avgResolutionTime: { $avg: { $ifNull: ['$duration', 0] } }
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          timestamp: '$_id',
+          avgResolutionTime: { $round: ['$avgResolutionTime', 0] }
+        }
       }
+    ];
 
-      if (!timeSeriesMap.has(key)) {
-        timeSeriesMap.set(key, { totalDuration: 0, count: 0 });
-      }
-
-      const entry = timeSeriesMap.get(key)!;
-      entry.totalDuration += problem.duration || 0;
-      entry.count++;
-    });
-
-    const data = Array.from(timeSeriesMap.entries())
-      .map(([timestamp, { totalDuration, count }]) => ({
-        timestamp,
-        avgResolutionTime: count > 0 ? Math.round(totalDuration / count) : 0,
-      }))
-      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const data = await collection.aggregate(pipeline).toArray();
 
     return { data };
   }

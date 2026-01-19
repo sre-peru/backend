@@ -96,6 +96,17 @@ class DatabaseConnection {
         'recentComments.comments.content': 'text',
       });
 
+      // Additional indexes for analytics performance
+      await collection.createIndex({ duration: 1 });
+      await collection.createIndex({ Autoremediado: 1 });
+      await collection.createIndex({ 'affectedEntities.entityId.id': 1 });
+      await collection.createIndex({ 'affectedEntities.entityId.type': 1 });
+      
+      // Compound indexes for common query patterns
+      await collection.createIndex({ startTime: -1, status: 1 });
+      await collection.createIndex({ severityLevel: 1, startTime: -1 });
+      await collection.createIndex({ Autoremediado: 1, FuncionoAutoRemediacion: 1 });
+
       console.log('✅ Database indexes created successfully');
     } catch (error) {
       console.warn('⚠️  Index creation warning:', error);
@@ -142,3 +153,11 @@ class DatabaseConnection {
 
 // Singleton instance
 export const database = new DatabaseConnection();
+
+/**
+ * Helper function to get database instance
+ * Compatible with services that use getDatabase() import
+ */
+export function getDatabase(): Db {
+  return database.getDb();
+}

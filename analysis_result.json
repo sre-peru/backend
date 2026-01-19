@@ -1,0 +1,67 @@
+[
+  {
+    "_id": "Failed database connects",
+    "count": 9,
+    "avgDuration": 21.444444444444443
+  },
+  {
+    "_id": "Container restarts",
+    "count": 2,
+    "avgDuration": 17
+  },
+  {
+    "_id": "Failure increase - Api Management - Ecommerce Autos Clientes",
+    "count": 5,
+    "avgDuration": 6
+  },
+  {
+    "_id": "Failure rate increase",
+    "count": 17,
+    "avgDuration": 8.647058823529411
+  },
+  {
+    "_id": "Failure increase - Api Management - Ecommerce Soat Yape",
+    "count": 1,
+    "avgDuration": 8
+  },
+  {
+    "_id": "Memory resources exhausted",
+    "count": 3,
+    "avgDuration": 3.5661555555555555
+  },
+  {
+    "_id": "Problematic node condition",
+    "count": 2,
+    "avgDuration": 14
+  },
+  {
+    "_id": "Pod eviction event",
+    "count": 5,
+    "avgDuration": 7.067696666666667
+  },
+  {
+    "_id": "Out-of-memory kills",
+    "count": 2,
+    "avgDuration": 8.94055
+  },
+  {
+    "_id": "Unexpected low load",
+    "count": 1,
+    "avgDuration": 8
+  },
+  {
+    "_id": "Multiple environment problems",
+    "count": 1,
+    "avgDuration": 6
+  },
+  {
+    "_id": "Multiple service problems",
+    "count": 1,
+    "avgDuration": 11
+  },
+  {
+    "_id": "Response time degradation",
+    "count": 1,
+    "avgDuration": 9
+  }
+]

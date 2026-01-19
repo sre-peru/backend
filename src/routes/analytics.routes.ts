@@ -4,8 +4,12 @@
 import { Router } from 'express';
 import * as analyticsController from '../controllers/analytics.controller';
 import { authenticate } from '../middlewares/auth.middleware';
+import falsePositiveRoutes from './false-positive.routes';
 
 const router = Router();
+
+// Mount false-positive analysis routes (no auth required for these analytics)
+router.use('/false-positives', falsePositiveRoutes);
 
 // All routes require authentication
 router.use(authenticate);

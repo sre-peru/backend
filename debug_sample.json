@@ -1,0 +1,181 @@
+{
+  "_id": "69381336c2cb91dd34d73b06",
+  "problemId": "-392930342829407747_1765252860000V2",
+  "displayId": "P-25122542",
+  "title": "Failed database connects",
+  "impactLevel": "SERVICES",
+  "severityLevel": "ERROR",
+  "status": "CLOSED",
+  "affectedEntities": [
+    {
+      "entityId": {
+        "id": "SERVICE-A0380038108260C5",
+        "type": "SERVICE"
+      },
+      "name": "OWEB"
+    }
+  ],
+  "impactedEntities": [
+    {
+      "entityId": {
+        "id": "SERVICE-A0380038108260C5",
+        "type": "SERVICE"
+      },
+      "name": "OWEB"
+    }
+  ],
+  "rootCauseEntity": null,
+  "managementZones": [
+    {
+      "id": "-1115605280647136133",
+      "name": "mz-pgac"
+    }
+  ],
+  "entityTags": [
+    {
+      "context": "CONTEXTLESS",
+      "key": "tn-pgac",
+      "value": "services-on-premise",
+      "stringRepresentation": "tn-pgac:services-on-premise"
+    },
+    {
+      "context": "CONTEXTLESS",
+      "key": "SC3",
+      "value": "BDs_Oracle",
+      "stringRepresentation": "SC3:BDs_Oracle"
+    },
+    {
+      "context": "CONTEXTLESS",
+      "key": "dt.admin",
+      "value": "st",
+      "stringRepresentation": "dt.admin:st"
+    },
+    {
+      "context": "CONTEXTLESS",
+      "key": "SC3",
+      "value": "6536",
+      "stringRepresentation": "SC3:6536"
+    }
+  ],
+  "problemFilters": [
+    {
+      "id": "f9f4bd75-d32c-3ad3-805c-b5ffcf7a0fb8",
+      "name": "al-pgac"
+    },
+    {
+      "id": "c21f969b-5f03-333d-83e0-4f8f136e7682",
+      "name": "Default"
+    },
+    {
+      "id": "88304599-b9cf-364f-8e18-5261575d8c56",
+      "name": "Alerta BigPanda"
+    }
+  ],
+  "startTime": "2025-12-08T23:04:00.000-05:00",
+  "endTime": "2025-12-08T23:26:00.000-05:00",
+  "evidenceDetails": {
+    "totalCount": 1,
+    "details": [
+      {
+        "evidenceType": "EVENT",
+        "displayName": "Failed database connects",
+        "entity": {
+          "entityId": {
+            "id": "SERVICE-A0380038108260C5",
+            "type": "SERVICE"
+          },
+          "name": "OWEB"
+        },
+        "groupingEntity": null,
+        "rootCauseRelevant": false,
+        "eventId": "-392930342829407747_1765252860000",
+        "eventType": "DATABASE_CONNECTION_FAILURE",
+        "data": {
+          "eventId": "-392930342829407747_1765252860000",
+          "startTime": "2025-12-08T23:01:00.000-05:00",
+          "endTime": "2025-12-08T23:26:00.000-05:00",
+          "eventType": "DATABASE_CONNECTION_FAILURE",
+          "title": "Failed database connects",
+          "entityId": {
+            "entityId": {
+              "id": "SERVICE-A0380038108260C5",
+              "type": "SERVICE"
+            },
+            "name": "OWEB"
+          },
+          "properties": [
+            {
+              "key": "dt.event.description",
+              "value": "The amount of 6 failed database connects exceeded the threshold of 6 in a period of 3 minutes."
+            },
+            {
+              "key": "dt.event.group_label",
+              "value": "Failed database connects"
+            },
+            {
+              "key": "dt.event.impact_level",
+              "value": "Services"
+            },
+            {
+              "key": "dt.event.is_rootcause_relevant",
+              "value": "true"
+            },
+            {
+              "key": "dt.event.timeout",
+              "value": "0"
+            }
+          ],
+          "status": "CLOSED",
+          "correlationId": "73F41EBEF1D96008",
+          "entityTags": [
+            {
+              "context": "CONTEXTLESS",
+              "key": "tn-pgac",
+              "value": "services-on-premise",
+              "stringRepresentation": "tn-pgac:services-on-premise"
+            },
+            {
+              "context": "CONTEXTLESS",
+              "key": "SC3",
+              "value": "BDs_Oracle",
+              "stringRepresentation": "SC3:BDs_Oracle"
+            },
+            {
+              "context": "CONTEXTLESS",
+              "key": "dt.admin",
+              "value": "st",
+              "stringRepresentation": "dt.admin:st"
+            },
+            {
+              "context": "CONTEXTLESS",
+              "key": "SC3",
+              "value": "6536",
+              "stringRepresentation": "SC3:6536"
+            }
+          ],
+          "managementZones": [
+            {
+              "id": "-1115605280647136133",
+              "name": "mz-pgac"
+            }
+          ],
+          "underMaintenance": false,
+          "suppressAlert": false,
+          "suppressProblem": false,
+          "frequentEvent": false
+        },
+        "startTime": "2025-12-08T23:01:00.000-05:00",
+        "endTime": "2025-12-08T23:26:00.000-05:00"
+      }
+    ]
+  },
+  "recentComments": {
+    "totalCount": 0,
+    "comments": []
+  },
+  "impactAnalysis": {
+    "impacts": []
+  },
+  "Autoremediado": "No",
+  "FuncionoAutoRemediacion": "No"
+}

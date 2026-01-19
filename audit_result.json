@@ -1,0 +1,93 @@
+[
+  {
+    "title": "Failed database connects",
+    "avgDuration": "21.4 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Container restarts",
+    "avgDuration": "17.0 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Failure increase - Api Management - Ecommerce Autos Clientes",
+    "avgDuration": "6.0 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Failure rate increase",
+    "avgDuration": "8.6 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Failure increase - Api Management - Ecommerce Soat Yape",
+    "avgDuration": "8.0 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Memory resources exhausted",
+    "avgDuration": "3.6 min",
+    "isAuto": "Si",
+    "verdict": "Ruido (Parpadeo)",
+    "action": "Aumentar time-window"
+  },
+  {
+    "title": "Problematic node condition",
+    "avgDuration": "14.0 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Pod eviction event",
+    "avgDuration": "7.1 min",
+    "isAuto": "Si",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Out-of-memory kills",
+    "avgDuration": "8.9 min",
+    "isAuto": "Si",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Unexpected low load",
+    "avgDuration": "8.0 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Multiple environment problems",
+    "avgDuration": "6.0 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Multiple service problems",
+    "avgDuration": "11.0 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  },
+  {
+    "title": "Response time degradation",
+    "avgDuration": "9.0 min",
+    "isAuto": "No",
+    "verdict": "Legítimo",
+    "action": "Monitorizar"
+  }
+]
