@@ -896,4 +896,173 @@ export class AnalyticsService {
 
     return { data };
   }
+
+  /**
+   * Get problems hierarchy for sunburst chart
+   * Groups problems by severity level and title
+   */
+  async getProblemsHierarchy(filters?: ProblemFilters) {
+    const collection = this.getCollection();
+    const match = this.buildMatchStage(filters);
+
+    // Map Dynatrace severity levels to UI severity categories
+    const severityMapping: Record<string, string> = {
+      'AVAILABILITY': 'CRITICAL',
+      'ERROR': 'HIGH',
+      'PERFORMANCE': 'MEDIUM',
+      'RESOURCE_CONTENTION': 'MEDIUM',
+      'CUSTOM_ALERT': 'LOW'
+    };
+
+    // Color mapping for severity levels
+    const severityColors: Record<string, string> = {
+      'CRITICAL': '#C41E3A',
+      'HIGH': '#E63946',
+      'MEDIUM': '#F77F00',
+      'LOW': '#FCBF49'
+    };
+
+    // First aggregation: get problems grouped by title and severity
+    const pipeline = [
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            title: '$title',
+            severityLevel: '$severityLevel'
+          },
+          count: { $sum: 1 },
+          avgDuration: { $avg: { $ifNull: ['$duration', 0] } },
+          affectedEntities: { $addToSet: { $arrayElemAt: ['$affectedEntities.name', 0] } }
+        }
+      },
+      { $sort: { count: -1 } }
+    ];
+
+    const results = await collection.aggregate(pipeline).toArray();
+
+    // Get total count
+    const totalCount = await collection.countDocuments(match);
+
+    // Group results by severity for the hierarchy
+    const severityGroups: Record<string, any[]> = {
+      'CRITICAL': [],
+      'HIGH': [],
+      'MEDIUM': [],
+      'LOW': []
+    };
+
+    // Track stats
+    const stats = {
+      total: 0,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      totalMttr: 0,
+      mttrCount: 0
+    };
+
+    results.forEach(item => {
+      const originalSeverity = item._id.severityLevel || 'CUSTOM_ALERT';
+      const mappedSeverity = severityMapping[originalSeverity] || 'LOW';
+      
+      const problemNode = {
+        id: `pr-${item._id.title?.substring(0, 20).replace(/\s+/g, '-').toLowerCase() || 'unknown'}`,
+        name: item._id.title || 'Unknown Problem',
+        value: item.count,
+        severity: mappedSeverity,
+        category: mappedSeverity,
+        description: `${item.count} occurrences of this problem type`,
+        mttr: Math.round(item.avgDuration) || 0,
+        affectedServices: item.affectedEntities?.slice(0, 5) || [],
+        rootCause: 'Analyze in Dynatrace for root cause details',
+        solution: 'Review problem pattern and adjust alerting thresholds',
+        itemStyle: { 
+          color: severityColors[mappedSeverity],
+          opacity: 0.8 
+        }
+      };
+
+      severityGroups[mappedSeverity].push(problemNode);
+      
+      // Update stats
+      stats.total++;
+      switch (mappedSeverity) {
+        case 'CRITICAL': stats.critical++; break;
+        case 'HIGH': stats.high++; break;
+        case 'MEDIUM': stats.medium++; break;
+        case 'LOW': stats.low++; break;
+      }
+      
+      if (problemNode.mttr > 0) {
+        stats.totalMttr += problemNode.mttr;
+        stats.mttrCount++;
+      }
+    });
+
+    // Build hierarchical structure for sunburst
+    const children = [];
+    
+    if (severityGroups['CRITICAL'].length > 0) {
+      const criticalTotal = severityGroups['CRITICAL'].reduce((sum, p) => sum + p.value, 0);
+      children.push({
+        name: 'Critical Issues',
+        value: criticalTotal,
+        description: 'AVAILABILITY severity - Immediate action required',
+        itemStyle: { color: severityColors['CRITICAL'] },
+        children: severityGroups['CRITICAL'].slice(0, 20) // Limit for performance
+      });
+    }
+
+    if (severityGroups['HIGH'].length > 0) {
+      const highTotal = severityGroups['HIGH'].reduce((sum, p) => sum + p.value, 0);
+      children.push({
+        name: 'High Priority',
+        value: highTotal,
+        description: 'ERROR severity - Requires attention',
+        itemStyle: { color: severityColors['HIGH'] },
+        children: severityGroups['HIGH'].slice(0, 20)
+      });
+    }
+
+    if (severityGroups['MEDIUM'].length > 0) {
+      const mediumTotal = severityGroups['MEDIUM'].reduce((sum, p) => sum + p.value, 0);
+      children.push({
+        name: 'Medium Priority',
+        value: mediumTotal,
+        description: 'PERFORMANCE/RESOURCE severity - Monitor closely',
+        itemStyle: { color: severityColors['MEDIUM'] },
+        children: severityGroups['MEDIUM'].slice(0, 20)
+      });
+    }
+
+    if (severityGroups['LOW'].length > 0) {
+      const lowTotal = severityGroups['LOW'].reduce((sum, p) => sum + p.value, 0);
+      children.push({
+        name: 'Low Priority',
+        value: lowTotal,
+        description: 'CUSTOM_ALERT severity - Informational',
+        itemStyle: { color: severityColors['LOW'] },
+        children: severityGroups['LOW'].slice(0, 20)
+      });
+    }
+
+    return {
+      hierarchy: {
+        name: 'Infrastructure Problems',
+        value: totalCount,
+        children
+      },
+      stats: {
+        total: stats.total,
+        totalOccurrences: totalCount,
+        critical: stats.critical,
+        high: stats.high,
+        medium: stats.medium,
+        low: stats.low,
+        avgMttr: stats.mttrCount > 0 ? Math.round(stats.totalMttr / stats.mttrCount) : 0
+      }
+    };
+  }
 }

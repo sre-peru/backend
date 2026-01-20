@@ -62,4 +62,8 @@ router.get('/autoremediation-timeseries', analyticsController.getAutoremediation
 // GET /api/v1/analytics/avg-resolution-timeseries
 router.get('/avg-resolution-timeseries', analyticsController.getAverageResolutionTimeTimeSeries);
 
+// GET /api/v1/analytics/problems-hierarchy
+router.get('/problems-hierarchy', analyticsController.getProblemsHierarchy);
+
 export default router;
+

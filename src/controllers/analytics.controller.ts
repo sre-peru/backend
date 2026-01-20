@@ -226,3 +226,16 @@ export const getAverageResolutionTimeTimeSeries = async (req: Request, res: Resp
     next(error);
   }
 };
+
+/**
+ * Get problems hierarchy for sunburst chart
+ */
+export const getProblemsHierarchy = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const filters = parseFilters(req.query);
+    const data = await getAnalyticsService().getProblemsHierarchy(filters);
+    sendSuccess(res, data);
+  } catch (error) {
+    next(error);
+  }
+};
