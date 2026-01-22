@@ -3,6 +3,7 @@
  */
 import { Router } from 'express';
 import * as analyticsController from '../controllers/analytics.controller';
+import { downtimeController } from '../controllers/downtime.controller';
 import { authenticate } from '../middlewares/auth.middleware';
 import falsePositiveRoutes from './false-positive.routes';
 
@@ -13,6 +14,9 @@ router.use('/false-positives', falsePositiveRoutes);
 
 // All routes require authentication
 router.use(authenticate);
+
+// GET /api/v1/analytics/downtime
+router.get('/downtime', downtimeController.getDowntimeStats.bind(downtimeController));
 
 // GET /api/v1/analytics/kpis
 router.get('/kpis', analyticsController.getKPIs);
