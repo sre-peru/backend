@@ -53,9 +53,13 @@ export const createApp = (): Application => {
       message: 'Too many requests from this IP, please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
+      // Skip rate limiting for authentication endpoints to allow login
+      skip: (req) => {
+        return req.path.startsWith('/api/v1/auth/');
+      }
     });
     app.use('/api/', limiter);
-    console.log(`✅ Rate limiting enabled: ${config.rateLimit.maxRequests} requests per ${config.rateLimit.windowMs}ms`);
+    console.log(`✅ Rate limiting enabled: ${config.rateLimit.maxRequests} requests per ${config.rateLimit.windowMs}ms (auth endpoints excluded)`);
   } else {
     console.log('⚠️  Rate limiting disabled in development mode');
   }
