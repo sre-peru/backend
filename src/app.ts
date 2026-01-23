@@ -45,15 +45,20 @@ export const createApp = (): Application => {
     })
   );
 
-  // Rate limiting
-  const limiter = rateLimit({
-    windowMs: config.rateLimit.windowMs,
-    max: config.rateLimit.maxRequests,
-    message: 'Too many requests from this IP, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-  app.use('/api/', limiter);
+  // Rate limiting - Disabled in development, enabled in production
+  if (!config.server.isDevelopment) {
+    const limiter = rateLimit({
+      windowMs: config.rateLimit.windowMs,
+      max: config.rateLimit.maxRequests,
+      message: 'Too many requests from this IP, please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+    app.use('/api/', limiter);
+    console.log(`✅ Rate limiting enabled: ${config.rateLimit.maxRequests} requests per ${config.rateLimit.windowMs}ms`);
+  } else {
+    console.log('⚠️  Rate limiting disabled in development mode');
+  }
 
   // Body parsing middleware
   app.use(express.json({ limit: '10mb' }));

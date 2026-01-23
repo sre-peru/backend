@@ -88,14 +88,6 @@ export class DowntimeService {
     return true;
   }
 
-  /**
-   * Calculate duration in hours
-   */
-  private calculateDurationHours(startTime: Date | string, endTime: Date | string): number {
-    const start = new Date(startTime).getTime();
-    const end = new Date(endTime).getTime();
-    return (end - start) / 3600000; // Convert ms to hours
-  }
 
   /**
    * Get month key from date (YYYY-MM format)
@@ -121,33 +113,59 @@ export class DowntimeService {
    */
   async getDowntimeStats(startDate: string, endDate: string): Promise<DowntimeStats> {
     const collection = this.getCollection();
+    const startTime = Date.now();
 
     console.log('🔍 Fetching problems from MongoDB:', { startDate, endDate });
 
-    // Fetch problems in date range - using string comparison for MongoDB dates
-    const problems = await collection.find({
-      $or: [
-        {
-          startTime: {
-            $gte: startDate,
-            $lt: endDate
+    // Fetch problems in date range with field projection for better performance
+    const queryStartTime = Date.now();
+    const problems = await collection.find(
+      {
+        $or: [
+          {
+            startTime: {
+              $gte: startDate,
+              $lt: endDate
+            }
+          },
+          {
+            startTime: {
+              $gte: new Date(startDate),
+              $lt: new Date(endDate)
+            }
           }
-        },
-        {
-          startTime: {
-            $gte: new Date(startDate),
-            $lt: new Date(endDate)
-          }
+        ]
+      },
+      {
+        projection: {
+          // Only fetch fields we actually need
+          problemId: 1,
+          title: 1,
+          displayName: 1,
+          severityLevel: 1,
+          startTime: 1,
+          endTime: 1,
+          duration: 1,
+          'affectedEntities.name': 1,
+          impactMetrics: 1,
+          // Exclude heavy fields we don't need
+          recentComments: 0,
+          evidenceDetails: 0,
+          rootCauseEntity: 0,
+          entityTags: 0
         }
-      ]
-    }).toArray() as unknown as Problem[];
+      }
+    ).toArray() as unknown as Problem[];
+    const queryEndTime = Date.now();
 
-    console.log(`📥 Fetched ${problems.length} problems from database`);
+    console.log(`📥 Fetched ${problems.length} problems from database in ${queryEndTime - queryStartTime}ms`);
 
     // Filter valid problems (remove false positives)
+    const filterStartTime = Date.now();
     const validProblems = problems.filter(p => this.isValidProblem(p));
+    const filterEndTime = Date.now();
 
-    console.log(`✅ ${validProblems.length} valid problems after filtering (removed ${problems.length - validProblems.length} false positives)`);
+    console.log(`✅ ${validProblems.length} valid problems after filtering (removed ${problems.length - validProblems.length} false positives) in ${filterEndTime - filterStartTime}ms`);
 
     // Initialize aggregation structures
     const monthlyData: Record<string, {
@@ -259,6 +277,19 @@ export class DowntimeService {
         }
       ])
     );
+
+    const endTime = Date.now();
+    const totalTime = endTime - startTime;
+    
+    console.log(`⏱️  Performance Summary:
+      - Total time: ${totalTime}ms (${(totalTime / 1000).toFixed(2)}s)
+      - Query time: ${queryEndTime - queryStartTime}ms
+      - Filter time: ${filterEndTime - filterStartTime}ms
+      - Processing time: ${endTime - filterEndTime}ms
+      - Records queried: ${problems.length}
+      - Records filtered: ${validProblems.length}
+      - Records returned: ${topProblems.length}
+    `);
 
     return {
       totalProblems: validProblems.length,
