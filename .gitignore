@@ -32,3 +32,19 @@ coverage/
 
 # Misc
 .cache/
+
+# Temp directories
+*-temp/
+temp/
+.temp/
+tmp/
+
+# Backup files
+*.bak
+*.backup
+*_backup.*
+*_old.*
+*_copy.*
+
+# TypeScript
+*.tsbuildinfo

@@ -8,6 +8,7 @@ import { database } from '../config/database';
 interface Problem {
   problemId: string;
   title: string;
+  displayId?: string;
   displayName?: string;
   severityLevel: string;
   startTime: Date | string;
@@ -35,6 +36,7 @@ interface MonthlySummary {
 
 interface TopProblem {
   title: string;
+  displayId: string;
   severity: string;
   durationHours: number;
   startTime: string;
@@ -138,8 +140,9 @@ export class DowntimeService {
       },
       {
         projection: {
-          // Only fetch fields we actually need
+          // Only fetch fields we actually need (inclusions only - no mixing with exclusions)
           problemId: 1,
+          displayId: 1,
           title: 1,
           displayName: 1,
           severityLevel: 1,
@@ -147,12 +150,7 @@ export class DowntimeService {
           endTime: 1,
           duration: 1,
           'affectedEntities.name': 1,
-          impactMetrics: 1,
-          // Exclude heavy fields we don't need
-          recentComments: 0,
-          evidenceDetails: 0,
-          rootCauseEntity: 0,
-          entityTags: 0
+          impactMetrics: 1
         }
       }
     ).toArray() as unknown as Problem[];
@@ -181,49 +179,72 @@ export class DowntimeService {
 
     // Process each valid problem using REAL calculation: (endTime - startTime) / 3600000
     for (const problem of validProblems) {
-      // Parse dates - handle both Date objects and ISO strings
-      const startTime = typeof problem.startTime === 'string' 
-        ? new Date(problem.startTime).getTime()
-        : problem.startTime.getTime();
-      
-      const endTime = typeof problem.endTime === 'string'
-        ? new Date(problem.endTime).getTime()
-        : problem.endTime.getTime();
+      try {
+        // Skip problems with missing dates
+        if (!problem.startTime || !problem.endTime) {
+          console.warn('[WARN] Problem missing startTime or endTime:', problem.problemId);
+          continue;
+        }
 
-      // REAL CALCULATION: (endTime - startTime) / 3600000
-      const durationHours = (endTime - startTime) / 3600000;
-      
-      const monthKey = this.getMonthKey(problem.startTime);
-      const severity = problem.severityLevel;
+        // Parse dates - handle both Date objects and ISO strings
+        const startTime = typeof problem.startTime === 'string' 
+          ? new Date(problem.startTime).getTime()
+          : problem.startTime.getTime();
+        
+        const endTime = typeof problem.endTime === 'string'
+          ? new Date(problem.endTime).getTime()
+          : problem.endTime.getTime();
 
-      totalHours += durationHours;
+        // Skip if dates are invalid
+        if (isNaN(startTime) || isNaN(endTime)) {
+          console.warn('[WARN] Invalid date for problem:', problem.problemId);
+          continue;
+        }
 
-      // Monthly aggregation
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = {
-          problems: 0,
-          hours: 0,
-          bySeverity: {}
-        };
+        // REAL CALCULATION: (endTime - startTime) / 3600000
+        const durationHours = (endTime - startTime) / 3600000;
+        
+        // Skip negative durations (data issue)
+        if (durationHours < 0) {
+          console.warn('[WARN] Negative duration for problem:', problem.problemId);
+          continue;
+        }
+        
+        const monthKey = this.getMonthKey(problem.startTime);
+        const severity = problem.severityLevel || 'UNKNOWN';
+
+        totalHours += durationHours;
+
+        // Monthly aggregation
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = {
+            problems: 0,
+            hours: 0,
+            bySeverity: {}
+          };
+        }
+        monthlyData[monthKey].problems++;
+        monthlyData[monthKey].hours += durationHours;
+
+        if (!monthlyData[monthKey].bySeverity[severity]) {
+          monthlyData[monthKey].bySeverity[severity] = { count: 0, hours: 0 };
+        }
+        monthlyData[monthKey].bySeverity[severity].count++;
+        monthlyData[monthKey].bySeverity[severity].hours += durationHours;
+
+        // Severity aggregation
+        if (!severityData[severity]) {
+          severityData[severity] = { count: 0, hours: 0 };
+        }
+        severityData[severity].count++;
+        severityData[severity].hours += durationHours;
+
+        // Store for top problems
+        allProblemsWithHours.push({ ...problem, durationHours });
+      } catch (error) {
+        console.error('[ERROR] Failed to process problem:', problem.problemId, error);
+        continue;
       }
-      monthlyData[monthKey].problems++;
-      monthlyData[monthKey].hours += durationHours;
-
-      if (!monthlyData[monthKey].bySeverity[severity]) {
-        monthlyData[monthKey].bySeverity[severity] = { count: 0, hours: 0 };
-      }
-      monthlyData[monthKey].bySeverity[severity].count++;
-      monthlyData[monthKey].bySeverity[severity].hours += durationHours;
-
-      // Severity aggregation
-      if (!severityData[severity]) {
-        severityData[severity] = { count: 0, hours: 0 };
-      }
-      severityData[severity].count++;
-      severityData[severity].hours += durationHours;
-
-      // Store for top problems
-      allProblemsWithHours.push({ ...problem, durationHours });
     }
 
     // Build monthly summary
@@ -257,6 +278,7 @@ export class DowntimeService {
       .slice(0, 10)
       .map(p => ({
         title: p.title || p.displayName || 'Unknown',
+        displayId: p.displayId || p.problemId || 'Unknown',
         severity: p.severityLevel,
         durationHours: Number(p.durationHours.toFixed(2)),
         startTime: new Date(p.startTime).toISOString(),
